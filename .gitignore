@@ -1,0 +1,7 @@
+*.webm
+*.webp
+*.jpg
+photo*.png
+Screenshot*.png
+*.safetensors
+**/cache/

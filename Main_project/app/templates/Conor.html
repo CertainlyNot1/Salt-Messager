@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Salt</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="sidebar">
+        <button onclick="window.location.href='/'"><img src="{{url_for('static',filename='touch_grass.png')}}" style="max-height: 350px; max-width: 250px;"></button>
+    </div>
+    <div class="chat-container">
+        <div class="chat-header"><h2>Conor (ai friend)</h2></div>
+        <div class="chat-messages" id="messages"></div>
+        <div class="chat-input">
+            <input id="message" placeholder="Hi Conor=>...">
+            <button onclick="SendMessage()">Deliver</button>
+        </div>
+    </div>
+</body>
+<script>
+
+    function SendMessage(){
+        const message = document.getElementById("message").value;
+        if (!message.trim()) return;
+
+        addMessage(message,'user');
+        document.getElementById('message').value = ''
+        fetch('/Conor',{
+            method: 'POST',
+            headers: {
+                'Content-Type':'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                user_id: '{{current_user.id}}',
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addMessage("Error: " + data.error, 'ai');
+                } else {
+                    addMessage(data.response, 'ai');
+                }
+            })
+            .catch(error => {
+                addMessage("Sorry, I'm having trouble with my acoustism =<...", 'ai');
+                console.error('Error:', error);
+            });
+
+    }
+
+        function addMessage(text,sender){
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = sender === 'user' ? 'message sent' : 'message received';
+            messageDiv.textContent = text;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messageDiv.scrollHeight; 
+        }
+
+        document.getElementById('message').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault(); // Prevent default form submission behavior
+        sendMessage();
+    }
+});
+
+        
+
+
+</script>
+</html>

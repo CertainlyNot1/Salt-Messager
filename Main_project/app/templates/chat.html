@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Salt</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="sidebar">
+        <h3>Chats</h3>
+        <input type="text" id="search-user" placeholder="jobo ffer" oninput="search_users()">
+        <ul id="user-list"></ul>
+        <ul id="chat-list">
+            {% for chat in current_user.chats %}
+                <li>
+                    <a href="{{ url_for('main.chat', chat_id=chat.id) }}">
+                        Chat with {{ chat.user1.username if chat.user2_id == current_user.id else chat.user2.username }}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+        <button id="Toggle-safety" onclick="ToggleSafe()" class="Smallkid-btn"><img src="{{url_for('static',filename='kidMode.png')}}">™</button>
+        <button id="Ai-Conor" onclick="Conor()" class="Ai-power"><img src="{{url_for('static',filename='AIyappr.png')}}" style="height: 100px; width: 200px;"></button>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            {% if chat %}
+                <h2> Chat with {{ chat.user1.username if chat.user2_id == current_user.id else chat.user2.username }}</h2>
+            {% else %}
+                <h2>No chat selected</h2>
+            {% endif %}
+        </div>
+
+        <div class="chat-messages" id="messages">
+            {% for msg in messages %}
+                {% if msg.message_type == 'video' %}
+                    <div class="video-message-container {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
+                            <video class="round-video" onclick="VideoOnclick(this)">
+                            <source src="{{ url_for('main.send_video', filename=msg.media_url.split('/')[-1]) }}" type="video/webm">
+                        </video>
+                    </div>
+                {% else %}
+                    <div class="message {% if msg.sender_id == current_user.id %}sent{% else %}received{% endif %}">
+                        {% if msg.message_type == 'audio' %}
+                            <audio controls>
+                                <source src="{{ url_for('main.send_audio', filename=msg.media_url.split('/')[-1]) }}" type="audio/webm">
+                            </audio>
+                        {% elif msg.message_type == 'photo' %}
+                            <img src="{{ url_for('main.send_photo', filename=msg.media_url.split('/')[-1]) }}" 
+                                 style="max-height: 300px; max-width: 250px;">
+                        {% else %}
+                            {{ msg.text }}
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="chat-input">
+            <input id="message" autocomplete="off" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
+            <button id="record-button"><img class="photo-icon" src="{{url_for('static',filename='EzLickNum2.png')}}"></button>
+            <button id="record-circle"><img class="photo-icon" src="{{url_for('static',filename='stilllick.png')}}"></button>
+            <button id="stop-circle" style="display: none;">stop videomessage</button>
+            <video id="circle-prev" autoplay muted style="display: none; max-width: 300px; max-height: 300px;"></video>
+            <input type="file" id="photo-upload" accept="image/*" onchange="sendPhoto(this.files[0])" style='display: none;'>
+            <button onclick="document.getElementById('photo-upload').click()"><img class="photo-icon" src="{{url_for('static',filename='EzestLick.png')}}"></button>
+        </div>
+    </div>
+    <audio id="player" controls style="display: none;"> </audio>
+
+    <script>
+        var socket = io();
+        var chat_id = "{{chat.id if chat else ''}}"
+        var current_user_id = "{{current_user.id}}"
+
+        // Scroll to bottom when page loads
+        window.addEventListener('load', function() {
+            scrollToBottom();
+            
+            // Add event listener for Enter key on message input
+            document.getElementById('message').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevent default form submission behavior
+                    sendMessage();
+                }
+            });
+        });
+
+        if(chat_id){
+            socket.emit('join',{chat_id:chat_id})
+        }
+
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        socket.on('message', function(msg) {
+            var div = document.createElement('div');
+            div.className = msg.sender_id == current_user_id ? 'message sent' : 'message received';
+            div.appendChild(document.createTextNode(msg.text));
+            document.getElementById('messages').appendChild(div);
+            scrollToBottom();
+        });
+
+        socket.on('audio_message', function(msg) {
+            var div = document.createElement('div');
+            div.className = msg.sender_id == current_user_id ? 'message sent' : 'message received';
+            
+            var audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = msg.audio_url + '?t=' + new Date().getTime(); // Cache buster
+            
+            div.appendChild(audio);
+            document.getElementById('messages').appendChild(div);
+            scrollToBottom();
+        });
+
+        socket.on('photo_message', function(msg) {
+            const div = document.createElement('div');
+            div.className = msg.sender_id == current_user_id ? 'message sent' : 'message received';
+
+            const imgContainer = document.createElement('div');
+            imgContainer.style.display = 'flex';
+            imgContainer.style.flexDirection = 'column'
+
+            const img = document.createElement('img');
+            img.src = msg.image_url;
+            img.style.maxHeight = '300px'
+            img.style.maxWidth = '250px'
+       
+            imgContainer.appendChild(img);
+            div.appendChild(imgContainer);
+     
+            document.getElementById('messages').appendChild(div);
+            scrollToBottom();
+        });
+
+        socket.on('video_message', function(msg) {
+            const container = document.createElement('div');
+            container.className = msg.sender_id == current_user_id ? 
+                'video-message-container sent' : 'video-message-container received';
+            
+            const video = document.createElement('video');
+            video.className = 'round-video';
+            video.onclick = function() { VideoOnclick(this); };
+            video.style.backgroundColor = '#000'; 
+            
+            const source = document.createElement('source');
+            source.src = msg.video_url + '?t=' + new Date().getTime();
+            source.type = 'video/webm';
+            
+            video.appendChild(source);
+            container.appendChild(video);
+            document.getElementById('messages').appendChild(container);
+            scrollToBottom();
+        });
+
+        function formatTime(seconds) {
+            var minutes = Math.floor(seconds / 60);
+            var secs = Math.floor(seconds % 60);
+            return minutes + ':' + (secs < 10 ? '0' : '') + secs;
+        }
+
+        function sendMessage() {
+            var msg = document.getElementById('message').value;
+            if (msg.trim() === "") return;
+
+            socket.emit('message', {
+                chat_id: chat_id,
+                text: msg,
+                user_id: current_user_id,
+                safe_mode: safeMode  // Include current mode
+            });
+            document.getElementById('message').value = '';
+        }
+            
+
+        function search_users(){
+            var query = document.getElementById("search-user").value;
+            fetch(`/search_users?query=${query}`)
+            .then(response => response.json())
+            .then(data => {
+                var userlist = document.getElementById("user-list");
+                userlist.innerHTML = "";
+                data.forEach(user => {
+                    var li = document.createElement("li");
+                    var a = document.createElement("a");
+                    a.href = `/start_chat/${user.id}`;
+                    a.textContent = user.username;
+                    li.appendChild(a);
+                    userlist.appendChild(li);
+                });
+            });
+        }
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioStream;
+        let videoStream;
+        let videoChunks = [];
+        const maxVideoDuration = 30000;
+        let safeMode = false;
+
+        document.getElementById('record-circle').addEventListener('click', async function() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                const videoPrev = document.getElementById('circle-prev');
+                videoPrev.srcObject = videoStream;
+                videoPrev.style.display = 'block';
+                
+                mediaRecorder = new MediaRecorder(videoStream, {
+                    mimeType: 'video/webm;codecs=vp9'
+                });
+                
+                videoChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        videoChunks.push(event.data); 
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const videoBlob = new Blob(videoChunks, { type: 'video/webm' });
+                    
+                    if (videoBlob.size > 20 * 1024 * 1024) {
+                        alert('Video is too large. Maximum size is 20MB.');
+                        return;
+                    }
+                    
+                    const reader = new FileReader();
+                    reader.readAsDataURL(videoBlob);
+                    
+                    reader.onload = () => {
+                        socket.emit('video_message', {
+                            chat_id: chat_id,
+                            video: reader.result,
+                            user_id: current_user_id,
+                            mime_type: 'video/webm'
+                        });
+                    };
+                    
+                    videoStream.getTracks().forEach(track => track.stop());
+                    document.getElementById('circle-prev').style.display = 'none';
+                    document.getElementById('record-circle').style.display = 'inline-block';
+                    document.getElementById('stop-circle').style.display = 'none';
+                };
+                
+                mediaRecorder.start(100); 
+                
+                setTimeout(() => {
+                    if (mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, maxVideoDuration);
+                
+                this.style.display = 'none';
+                document.getElementById('stop-circle').style.display = 'inline-block';
+                
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Could not access camera. Please check permissions.');
+            }
+        });
+
+        document.getElementById('stop-circle').addEventListener('click', function() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            
+            document.getElementById('record-circle').style.display = 'inline-block';
+            this.style.display = 'none';
+        });
+
+        document.getElementById('record-button').addEventListener('click', async function() {
+            if (mediaRecorder?.state === 'recording') {
+                // Stop recording
+                mediaRecorder.stop();
+                this.textContent = 'Record Voice';
+                this.classList.remove('recording');
+                
+                audioStream.getTracks().forEach(track => track.stop());
+            } else {
+                try {
+                    // Start recording
+                    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    mediaRecorder = new MediaRecorder(audioStream, { 
+                        mimeType: 'audio/webm' 
+                    });
+                    
+                    audioChunks = [];
+                    
+                    mediaRecorder.start();
+                    this.textContent = 'Stop Recording';
+                    this.classList.add('recording');
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        if (event.data.size > 0){
+                            audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        
+                        reader.onload = () => {
+                            socket.emit('audio_message', {
+                                chat_id: chat_id,
+                                audio: reader.result,
+                                user_id: current_user_id,
+                                mime_type: 'audio/webm'
+                            });
+                        };
+                    };
+                } catch (error) {
+                    console.error('Error recording audio:', error);
+                    alert('Could not access microphone');
+                    this.classList.remove('recording');
+                }
+            }
+        });
+
+        async function sendPhoto(file) {
+            try {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                
+                reader.onload = () => {
+                    const base64Image = reader.result;
+                    
+                    socket.emit('photo_message', {
+                        chat_id: chat_id,
+                        image: base64Image,
+                        user_id: current_user_id,
+                        file_name: file.name,
+                        mime_type: file.type
+                    });
+                    console.log('Photo sent');
+                };
+            } catch (error) {
+                console.error('an error occured while sending the photo:', error);
+            }
+        }
+
+        function VideoOnclick(video) {
+            document.querySelectorAll(".round-video").forEach(vid=>{
+                if(vid !== video){
+                    vid.pause();
+                    vid.currentTime = 0;
+                }
+            }); 
+            if(video.paused){
+                video.play();
+            }
+            else{
+                video.pause();
+                video.currentTime = 0
+            }
+        }
+        function ToggleSafe() {
+        safeMode = !safeMode;
+        const button = document.getElementById('Toggle-safety');
+        
+        // Update button appearance
+        if (safeMode) {
+            button.style.backgroundColor = 'green';
+            button.innerHTML = "<img src='{{url_for('static',filename='kidMode.png')}}'>™";
+        } else {
+            button.style.backgroundColor = 'red';
+            button.innerHTML = "<img src='{{url_for('static',filename='kidMode.png')}}'>™";
+        }
+        
+        // Optional: Show a brief notification
+        const notification = document.createElement('div');
+        notification.textContent = safeMode ? 'Safe mode activated' : 'safe mode disabled';
+        notification.style.position = 'fixed';
+        notification.style.bottom = '70px';
+        notification.style.right = '20px';
+        notification.style.backgroundColor = safeMode ? 'green' : 'red';
+        notification.style.color = 'white';
+        notification.style.padding = '10px';
+        notification.style.borderRadius = '5px';
+        notification.style.zIndex = '1000';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 2000);
+
+
+    }
+
+    function Conor(){window.location.href = '/Conor'}
+
+    </script>
+</body>
+</html>

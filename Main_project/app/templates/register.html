@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Register</title>
+        <link rel="stylesheet" href="{{url_for('static',filename='logreg.css')}}">
+    </head>
+    <body>
+        <img class="logo" src="{{url_for('static',filename='saltyy_new_placeholder.png')}}">
+        <h2>Register</h2>
+        <form method="post">
+            <label>Username <input type="text" name="username" required></label>
+            <label>Password <input type="password" name="password" required></label>
+            <button type="submit">Register</button>
+
+        </form>
+    </body>
+</html>
